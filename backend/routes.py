@@ -77,9 +77,13 @@ async def voice_pipeline(audio: UploadFile = File(...), session_id: str = "defau
         # Step 2: Send to Copilot Studio
         response_text = await copilot.send_message(transcript, session_id)
 
-        # Step 3: Text-to-Speech
-        audio_bytes = await synthesize_speech(response_text)
-        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        # Step 3: Text-to-Speech (non-fatal — text always returned even if TTS fails)
+        audio_b64 = None
+        try:
+            audio_bytes = await synthesize_speech(response_text)
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+        except Exception as tts_err:
+            print(f"[WARN] TTS failed ({type(tts_err).__name__}), returning text only")
 
         return {"transcript": transcript, "response": response_text, "audio": audio_b64}
 
@@ -100,9 +104,13 @@ async def chat_pipeline(req: ChatRequest):
 
     response_text = await copilot.send_message(req.message, req.session_id)
 
-    # Generate speech for the response
-    audio_bytes = await synthesize_speech(response_text)
-    audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    # Generate speech for the response (non-fatal — text always returned even if TTS fails)
+    audio_b64 = None
+    try:
+        audio_bytes = await synthesize_speech(response_text)
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    except Exception as tts_err:
+        print(f"[WARN] TTS failed ({type(tts_err).__name__}), returning text only")
 
     return {"response": response_text, "audio": audio_b64}
 

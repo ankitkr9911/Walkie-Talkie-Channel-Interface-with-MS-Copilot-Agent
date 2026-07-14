@@ -18,15 +18,16 @@ Run: uvicorn main:app --reload --port 8000
 import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+
+# Load .env BEFORE importing app modules — they read os.getenv() at import time
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
 from copilot_client import copilot
 from routes import router
-
-# Load environment variables from .env file
-load_dotenv()
 
 
 @asynccontextmanager
