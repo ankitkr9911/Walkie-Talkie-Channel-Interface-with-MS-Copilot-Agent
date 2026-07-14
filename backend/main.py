@@ -32,10 +32,25 @@ from routes import router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: initialize DB + seed data. Shutdown: cleanup connections."""
+    """Startup: initialize DB + download Piper model if needed. Shutdown: cleanup."""
     print("[*] Starting Walkie Talkie Backend...")
     await init_db()
     print("[OK] Database initialized")
+
+    # Auto-download Piper TTS model if path is configured but file not present
+    # This runs on Render first boot — model is ~63MB, takes ~30-60s
+    piper_path = os.getenv("PIPER_MODEL_PATH", "")
+    if piper_path and not os.path.exists(piper_path):
+        print(f"[*] Piper model not found at '{piper_path}' — downloading from Hugging Face...")
+        try:
+            import urllib.request
+            base = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
+            urllib.request.urlretrieve(f"{base}/en_US-lessac-medium.onnx", piper_path)
+            urllib.request.urlretrieve(f"{base}/en_US-lessac-medium.onnx.json", piper_path + ".json")
+            print("[OK] Piper model downloaded")
+        except Exception as e:
+            print(f"[WARN] Piper model download failed: {e} — TTS will fall back to edge-tts")
+
     yield
     await copilot.close()
     print("[*] Backend shut down")

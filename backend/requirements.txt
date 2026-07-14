@@ -13,7 +13,9 @@ aiosqlite==0.20.0
 faster-whisper==1.1.0
 numpy>=1.24.0          # Used in speech.py for audio array conversion
 
-# -- Text-to-Speech (Microsoft Edge TTS) --
+# -- Text-to-Speech (Piper — offline TTS, no network required) --
+piper-tts>=1.2.0
+# -- Text-to-Speech fallback (Microsoft Edge TTS — requires internet) --
 edge-tts==6.1.12
 
 # -- HTTP client (for Direct Line API) --

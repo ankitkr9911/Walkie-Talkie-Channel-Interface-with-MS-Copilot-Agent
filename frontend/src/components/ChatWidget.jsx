@@ -41,7 +41,7 @@ export default function ChatWidget() {
   const playAudio = useCallback((base64Audio) => {
     if (!base64Audio) return;
     const audio = audioRef.current;
-    audio.src = `data:audio/mp3;base64,${base64Audio}`;
+    audio.src = `data:audio/wav;base64,${base64Audio}`;
     audio.onplay = () => setIsPlaying(true);
     audio.onended = () => setIsPlaying(false);
     audio.onerror = () => setIsPlaying(false);

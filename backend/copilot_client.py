@@ -65,8 +65,8 @@ class CopilotClient:
         }
         await self._http.post(f"{DIRECTLINE_BASE}/conversations/{conv_id}/activities", json=activity, headers=headers)
 
-        # Poll for bot response
-        response_text = await self._poll_response(conv_id, token, watermark)
+        # Poll for bot response — pass session_id so watermark updates the right session
+        response_text = await self._poll_response(conv_id, token, watermark, session_id)
         return response_text
 
     async def _start_conversation(self) -> dict:
@@ -81,9 +81,10 @@ class CopilotClient:
             "watermark": None,
         }
 
-    async def _poll_response(self, conv_id: str, token: str, watermark: str = None) -> str:
+    async def _poll_response(self, conv_id: str, token: str, watermark: str = None, session_id: str = "default") -> str:
         """Poll for the bot's reply activity. Returns the response text."""
         headers = {"Authorization": f"Bearer {token}"}
+        user_id = f"user-{session_id}"
         elapsed = 0
 
         while elapsed < POLL_TIMEOUT_SEC:
@@ -98,12 +99,20 @@ class CopilotClient:
             resp.raise_for_status()
             data = resp.json()
 
-            # Look for bot reply (activity not from user)
             for activity in data.get("activities", []):
-                if activity.get("from", {}).get("id") != f"user-default" and activity.get("type") == "message":
-                    # Update watermark for next turn
-                    self._sessions.setdefault("default", {})["watermark"] = data.get("watermark")
-                    return activity.get("text", "I couldn't process that request.")
+                from_id = activity.get("from", {}).get("id", "")
+                act_type = activity.get("type", "")
+
+                if from_id == user_id:   # Skip our own sent message
+                    continue
+
+                print(f"[DEBUG] Bot activity: type={act_type}, from={from_id}, text={str(activity.get('text', ''))[:100]}")
+
+                if act_type == "message":
+                    text = activity.get("text", "")
+                    if text.strip():
+                        self._sessions[session_id]["watermark"] = data.get("watermark")
+                        return text
 
         return "I'm sorry, the request timed out. Please try again."
 

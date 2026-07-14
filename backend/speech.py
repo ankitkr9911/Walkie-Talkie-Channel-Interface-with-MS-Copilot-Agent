@@ -2,14 +2,15 @@
 speech.py — Speech Processing Layer
 =====================================
 STT: Faster-Whisper (offline, open-source, MIT license)
-TTS: edge-tts (Microsoft Edge TTS — high quality, no model downloads)
-
-Note: edge-tts is used instead of Piper for Windows compatibility.
-For production Linux deployment, swap synthesize_speech() to use Piper.
+TTS: Piper TTS (offline, no network — avoids corporate proxy blocks)
+     Falls back to edge-tts if PIPER_MODEL_PATH is not set.
 """
 
 import os
 import io
+import re
+import wave
+import asyncio
 import tempfile
 import numpy as np
 import av
@@ -101,18 +102,99 @@ def transcribe_audio(audio_path: str) -> str:
     return transcript.strip()
 
 
-async def synthesize_speech(text: str, retries: int = 3) -> bytes:
-    """
-    Convert text to speech audio (MP3) using Microsoft Edge TTS.
-    Returns raw MP3 bytes that can be played directly in the browser.
+# ---------- Piper TTS (offline) ----------
+PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "")   # Full path to .onnx model file
+_piper_voice = None
 
-    Retries on failure because edge-tts intermittently gets 403 from
-    Microsoft's WebSocket endpoint (rate limiting / token rotation).
-    """
-    import asyncio
 
+def _get_piper_voice():
+    """Lazy-load Piper TTS model on first call. Returns None if not configured."""
+    global _piper_voice
+    if _piper_voice is not None:
+        return _piper_voice
+    if not PIPER_MODEL_PATH or not os.path.exists(PIPER_MODEL_PATH):
+        return None
+    try:
+        from piper import PiperVoice
+        print(f"[*] Loading Piper TTS model '{PIPER_MODEL_PATH}'...")
+        _piper_voice = PiperVoice.load(PIPER_MODEL_PATH)
+        print("[OK] Piper TTS model loaded")
+        return _piper_voice
+    except Exception as e:
+        print(f"[WARN] Piper TTS load failed: {e}")
+        return None
+
+
+def _piper_synth_sync(text: str) -> bytes:
+    """
+    Synthesize speech using Piper — synchronous, runs in a thread executor.
+    Returns raw WAV bytes ready for base64 encoding and browser playback.
+    Audio extraction logic adapted from the user's tested Piper script.
+    """
+    voice = _get_piper_voice()
+    if voice is None:
+        raise RuntimeError("Piper model not available")
+
+    # Clean text (same logic as the tested Piper script)
+    text = re.sub(r'([.?!,])\1+', r'\1', text)          # collapse repeated punctuation
+    text = re.sub(r'([.?!,])(?=[^\s])', r'\1 ', text)   # ensure space after punctuation
+    text = re.sub(r'[^a-zA-Z0-9\s.,?!\'-]', '', text)   # strip unsupported characters
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    if not text:
+        return b""
+
+    audio_chunks = []
+    for chunk in voice.synthesize(text):
+        # Try each known attribute name across piper-tts versions
+        for attr in ["audio_int16_bytes", "audio_int16_array", "audio", "audio_float_array"]:
+            if hasattr(chunk, attr):
+                val = getattr(chunk, attr)
+                if attr == "audio_int16_bytes":
+                    audio_chunks.append(val)
+                elif attr in ("audio_int16_array", "audio"):
+                    arr = np.asarray(val, dtype=np.int16)
+                    audio_chunks.append(arr.tobytes())
+                elif attr == "audio_float_array":
+                    arr = np.asarray(val, dtype=np.float32)
+                    audio_chunks.append((arr * 32767).astype(np.int16).tobytes())
+                break
+
+    if not audio_chunks:
+        return b""
+
+    pcm_bytes = b"".join(audio_chunks)
+
+    # Pack raw PCM into a proper WAV container
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav_file:
+        wav_file.setnchannels(1)                        # mono
+        wav_file.setsampwidth(2)                        # 16-bit
+        wav_file.setframerate(voice.config.sample_rate) # e.g. 22050 Hz
+        wav_file.writeframes(pcm_bytes)
+    return buf.getvalue()
+
+
+async def synthesize_speech(text: str) -> bytes:
+    """
+    Convert text to speech audio.
+
+    Primary:  Piper TTS (fully offline, no network calls — immune to corporate proxy blocks).
+              Requires PIPER_MODEL_PATH set in .env pointing to .onnx model file.
+              Returns WAV bytes.
+
+    Fallback: edge-tts (requires internet — blocked on Accenture network).
+              Returns MP3 bytes.
+    """
+    # --- Primary: Piper (offline) ---
+    if _get_piper_voice() is not None:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _piper_synth_sync, text)
+
+    # --- Fallback: edge-tts (network required) ---
+    print("[INFO] Piper model not configured — trying edge-tts (may fail on corporate networks)")
     last_err = None
-    for attempt in range(retries):
+    for attempt in range(3):
         try:
             communicate = edge_tts.Communicate(text, TTS_VOICE)
             audio_chunks = []
@@ -123,8 +205,8 @@ async def synthesize_speech(text: str, retries: int = 3) -> bytes:
                 return b"".join(audio_chunks)
         except Exception as e:
             last_err = e
-            print(f"[WARN] TTS attempt {attempt + 1}/{retries} failed: {type(e).__name__}: {e}")
-            if attempt < retries - 1:
-                await asyncio.sleep(1)  # Brief pause before retry
+            print(f"[WARN] edge-tts attempt {attempt + 1}/3 failed: {type(e).__name__}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(1)
 
-    raise last_err or RuntimeError("TTS failed after all retries")
+    raise last_err or RuntimeError("All TTS methods failed")

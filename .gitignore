@@ -19,6 +19,11 @@ backend/.env
 backend/models/
 *.bin
 
+# Piper TTS model files (large binary files — download locally, not committed to git)
+# On Render, edge-tts is used as fallback (cloud server can reach Microsoft endpoints)
+*.onnx
+*.onnx.json
+
 # Node.js (frontend)
 frontend/node_modules/
 frontend/dist/

@@ -16,14 +16,6 @@
         "summary": "Inventory Lookup",
         "description": "Use this tool when the user asks about stock, availability, or quantity of a SPECIFIC product by name. Supports filtering by warehouse city, category, and price range. Examples: How many Dell laptops are in stock?, Show inventory for Bangalore warehouse, Do we have HP EliteBooks available?, Find all monitors under 20000.",
         "operationId": "inventoryLookup",
-        "parameters": [
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -49,14 +41,6 @@
         "summary": "Inventory Query",
         "description": "Use this tool for BROAD inventory questions involving filtering by status or relationships. NOT for specific product names. filter_type must be one of: low_stock, out_of_stock, by_supplier, by_warehouse, by_category, recent. Examples: Which items are running low?, What is out of stock in Mumbai?, Show items by supplier Dell.",
         "operationId": "inventoryQuery",
-        "parameters": [
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -82,14 +66,6 @@
         "summary": "Inventory Analytics",
         "description": "Use this tool when the user wants AGGREGATE statistics, rankings, or summaries. metric must be one of: highest_stock, lowest_stock, average_stock, top_n, category_distribution, warehouse_summary. Examples: Top 10 items by stock, Average stock level, Which category has the most inventory?, Give me a warehouse summary.",
         "operationId": "inventoryAnalytics",
-        "parameters": [
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -115,14 +91,6 @@
         "summary": "Inventory Recommendation",
         "description": "Use this tool when the user asks for business RECOMMENDATIONS or restocking suggestions. action must be one of: reorder_check, low_stock_alert, alternatives, restock_priorities. Examples: Should we reorder Dell laptops?, What needs restocking?, Suggest alternatives for ThinkPad.",
         "operationId": "inventoryRecommendation",
-        "parameters": [
-          {
-            "name": "x-api-key",
-            "in": "header",
-            "required": false,
-            "schema": { "type": "string" }
-          }
-        ],
         "requestBody": {
           "required": true,
           "content": {
