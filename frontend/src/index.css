@@ -1,0 +1,468 @@
+/*
+ * index.css — Walkie Talkie UI Styles
+ * =====================================
+ * Design Reference: Rounded card with sky-blue border (#7EC8E3),
+ * browser chrome mockup, 4-icon toolbar, chat bubbles, voice footer.
+ *
+ * Color Palette:
+ *   Primary Blue: #2F6FED
+ *   Sky Blue Border: #7EC8E3
+ *   Light BG: #F5F6F8 / #F1F3F5
+ *   Text: #111827 / #6B7280
+ *   White: #FFFFFF
+ */
+
+/* ========== Reset & Base ========== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(135deg, #e8f4fd 0%, #f0f2ff 50%, #e6f0fa 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 420px;
+}
+
+/* ========== Widget Card ========== */
+.widget-card {
+  background: #ffffff;
+  border: 2px solid #7EC8E3;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow:
+    0 4px 24px rgba(126, 200, 227, 0.15),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.3s ease;
+}
+
+.widget-card:hover {
+  box-shadow:
+    0 8px 32px rgba(126, 200, 227, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ========== Header ========== */
+.widget-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.widget-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.3px;
+}
+
+/* ========== Browser Chrome ========== */
+.browser-chrome {
+  background: #F1F3F5;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chrome-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.dot-red { background: #ccc; }
+.dot-yellow { background: #ccc; }
+.dot-green { background: #ccc; }
+
+.chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.chrome-nav {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.chrome-url {
+  font-size: 11px;
+  color: #9ca3af;
+  background: #e5e7eb;
+  padding: 2px 10px;
+  border-radius: 4px;
+  flex: 1;
+  text-align: center;
+}
+
+/* ========== Agent Avatar ========== */
+.agent-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 4px;
+}
+
+.agent-avatar {
+  width: 40px;
+  height: 40px;
+  background: #2F6FED;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(47, 111, 237, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.agent-avatar:hover {
+  transform: scale(1.05);
+}
+
+.avatar-badge {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 16px;
+  height: 16px;
+  background: #2F6FED;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========== Toolbar ========== */
+.toolbar {
+  display: flex;
+  justify-content: space-evenly;
+  padding: 12px 8px;
+  gap: 4px;
+}
+
+.toolbar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 6px;
+  border-radius: 10px;
+  color: #374151;
+  transition: all 0.2s ease;
+  min-width: 72px;
+}
+
+.toolbar-btn:hover {
+  background: #f0f4ff;
+  color: #2F6FED;
+}
+
+.toolbar-btn.active {
+  background: #eef2ff;
+  color: #2F6FED;
+  font-weight: 600;
+}
+
+.toolbar-btn span {
+  font-size: 10px;
+  color: #6B7280;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.toolbar-btn.active span,
+.toolbar-btn:hover span {
+  color: #2F6FED;
+}
+
+/* ========== Chat Panel ========== */
+.chat-panel {
+  background: #F5F6F8;
+  margin: 0 14px;
+  border-radius: 14px;
+  padding: 14px;
+  flex: 1;
+}
+
+.chat-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.message-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 4px;
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styling */
+.message-list::-webkit-scrollbar {
+  width: 4px;
+}
+.message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.message-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+/* ========== Message Bubbles ========== */
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.message-row.bot {
+  justify-content: flex-start;
+}
+
+.message-row.user {
+  justify-content: flex-end;
+}
+
+.msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bot-icon {
+  background: #6B7280;
+}
+
+.user-icon {
+  background: #2F6FED;
+}
+
+.message-bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  animation: fadeIn 0.3s ease;
+}
+
+.message-bubble.bot {
+  background: #e5e7eb;
+  color: #111827;
+  border-radius: 14px 14px 14px 4px;
+}
+
+.message-bubble.user {
+  background: #2F6FED;
+  color: #ffffff;
+  border-radius: 14px 14px 4px 14px;
+}
+
+.message-bubble.typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6B7280;
+  font-style: italic;
+}
+
+/* ========== Input Area ========== */
+.input-area {
+  padding: 12px 14px;
+}
+
+/* Hold-To-Talk Button */
+.ptt-button {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid #2F6FED;
+  background: linear-gradient(135deg, #eef2ff 0%, #f0f4ff 100%);
+  color: #2F6FED;
+  border-radius: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ptt-button:hover:not(:disabled) {
+  background: #2F6FED;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(47, 111, 237, 0.3);
+}
+
+.ptt-button:active:not(:disabled),
+.ptt-button.recording {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.2);
+  transform: scale(0.98);
+}
+
+.ptt-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Text Input Row */
+.text-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.text-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 14px;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.text-input:focus {
+  border-color: #2F6FED;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.1);
+}
+
+.text-input::placeholder {
+  color: #9ca3af;
+}
+
+.send-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: #2F6FED;
+  color: #fff;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #1d5bc9;
+  box-shadow: 0 2px 8px rgba(47, 111, 237, 0.3);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========== Voice Footer ========== */
+.voice-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid #f0f0f0;
+  color: #6B7280;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* ========== Animations ========== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse {
+  animation: pulse 1.2s ease-in-out infinite;
+  color: #2F6FED;
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 480px) {
+  .app-container {
+    max-width: 100%;
+  }
+
+  .widget-card {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    min-height: 100vh;
+  }
+
+  .message-list {
+    max-height: calc(100vh - 380px);
+  }
+
+  .toolbar-btn span {
+    font-size: 9px;
+  }
+}

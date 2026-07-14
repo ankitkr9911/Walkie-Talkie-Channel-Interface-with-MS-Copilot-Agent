@@ -1,0 +1,98 @@
+Part 1: Integrating the Copilot Studio Agent with Your FastAPI Backend
+There are actually two separate integration directions here, not one. It's easy to conflate them, so let's separate clearly:
+Direction A — Copilot Studio calling your APIs (outbound, agent → backend)
+Direction B — Your FastAPI backend calling Copilot Studio to get a response (inbound, backend → agent)
+You need both, since your voice pipeline is custom (not using Teams or the default web chat widget).
+A. Registering Your FastAPI Endpoints as Tools Inside the Agent
+Yes — this is exactly right. Each of your four REST APIs (/lookup, /query, /analytics, /recommendation) becomes a Tool/Action inside the Copilot Studio agent. Here's how:
+
+Make your backend publicly reachable over HTTPS. Copilot Studio cannot call localhost. Deploy FastAPI to something like Azure App Service, Azure Container Apps, or any HTTPS-accessible host.
+Write an OpenAPI (Swagger) spec for your APIs. This is the single most important step — Copilot Studio's LLM decides when to call a tool based on the description fields in your OpenAPI spec, not your code. Be explicit:
+
+yaml   /api/inventory/lookup:
+     post:
+       summary: Look up inventory for a specific product
+       description: Use this when the user asks about stock/availability of a specific product, optionally filtered by warehouse, category, or price.
+       parameters:
+         - name: product
+           description: Product name mentioned by the user (e.g. "Dell Laptop")
+         - name: warehouse
+           description: Warehouse name if mentioned
+FastAPI actually generates this automatically at /openapi.json — you just need to enrich the summary/description fields since generic ones ("Post lookup") will confuse the LLM's tool-selection.
+
+In Copilot Studio, go to your Agent → Tools → Add a tool → New tool → Import from OpenAPI. Point it at your /openapi.json URL or upload the spec file. Each endpoint you expose there becomes a selectable action.
+Set up authentication between Copilot Studio and FastAPI. Simplest options:
+
+API key header (x-api-key) validated in FastAPI middleware
+Or Azure AD app registration if you want enterprise-grade auth
+Configure this under the tool's connection settings in Copilot Studio.
+
+
+Name and describe each tool precisely inside the Copilot Studio UI (it lets you override the OpenAPI descriptions). This description is literally what the agent's LLM reads to decide "should I call Inventory Lookup or Inventory Analytics for this question?" — so treat it like prompt engineering, not documentation.
+Test in the Copilot Studio test pane with your example utterances ("How many Dell laptops are available?") before wiring up voice at all. Confirm the agent picks the right tool and the JSON round-trips correctly.
+
+B. Calling the Agent From Your FastAPI Backend (Voice Pipeline)
+Since your frontend isn't Teams/Web Chat, your FastAPI backend needs to talk to the agent programmatically. This is done via the Copilot Studio API (Direct Line-based):
+
+In Copilot Studio, under Settings → Security → Web channel security, or under Publish, generate the connection details for the agent — you'll get a bot endpoint/token URL.
+In FastAPI's copilot_client.py, implement:
+
+Start a conversation (POST /conversations) → get a conversationId and token.
+Send the transcript as a message (POST /conversations/{id}/activities) with the Whisper-generated text.
+Poll or listen for the bot's reply activity, which contains Copilot's final natural-language text.
+
+
+Pass that returned text into Piper for TTS, exactly as your architecture diagram shows.
+
+So concretely, in your services/copilot_client.py, you're writing an HTTP client that authenticates once (client credentials flow, Azure AD app registration tied to your Copilot Studio environment), then makes two calls per user turn: start/continue conversation, and post activity. This is the piece that replaces "hardcoded intent routing" in your backend — you're just relaying, as your document already emphasizes.
+One practical note: the first time through, budget real time for tool-selection accuracy tuning — LLM-based tool routing in Copilot Studio is good but not perfect out of the box, and you'll likely rewrite a few tool descriptions and add a couple of clarifying example phrases per tool after testing with real transcripts (Whisper output is sometimes imperfect, e.g. "Dell laptop's" vs "Dell laptop").
+
+Part 2: Web App Design Description
+Here's a detailed breakdown of the UI in your reference image, written so you (or a frontend agent) can build it directly.
+Overall container
+
+A single card, roughly 360–400px wide, with a light sky-blue border (~2px, #7EC8E3-ish) and large rounded corners (~20–24px radius).
+White background inside the card.
+Small numbered badge ("2") in a dark circle at the top-left corner, overlapping the card border — likely a step marker if this is part of a numbered architecture explainer, optional for the actual app.
+
+Header bar
+
+Label "React / Web Application" in bold, dark text, left-aligned, sitting just inside the top of the card, with generous padding.
+
+Browser chrome mockup (top strip)
+
+A thin horizontal bar styled like a browser window: three small dots (traffic-light style, gray/muted, top-left) and a stylized address bar/back-arrow icon (< >) beside them.
+Light gray background (#F1F3F5), separates the "browser" from the app content below with a subtle border.
+
+App header row
+
+Below the browser chrome: a header row with a blue chat-bubble + person icon on the right side (this represents the active agent/assistant avatar) — a rounded square, medium blue (#2F6FED-ish), white speech-bubble icon inside, small white person silhouette badge overlapping its bottom-right corner.
+
+Icon toolbar row
+
+Four icons in a horizontal row, evenly spaced, each icon above a short label in small gray text:
+
+Microphone icon → label "Hold-To-Talk"
+Microphone icon (slightly different style) → label "Audio Recorder"
+Chat bubble icon → label "Chat UI"
+Speaker icon → label "Audio Player"
+
+
+Icons are simple, single-color (dark gray/black), minimal line-style, no fill — flat icon set (like Feather Icons or Lucide).
+
+Chat conversation panel
+
+A light gray rounded rectangle container (#F5F6F8, radius ~12px) housing the conversation.
+Small heading "Chat Conversation" in bold at the top of this panel.
+Bot/agent message: light gray rounded bubble, left-aligned, small assistant icon to its left (blue person/bot icon), placeholder text shown (e.g., partial transcript).
+User message: darker blue rounded bubble (#2F6FED), right-aligned, white text, small user avatar icon (blue circle, white person silhouette) to its right.
+Bubbles have generous padding (~12px), rounded corners (~14–16px), and comfortable vertical spacing (~8–12px) between messages.
+
+Voice response footer
+
+A thin divider line, then a bottom row with a speaker/audio icon and the label "Voice Response" in medium-gray text, left-aligned — indicating the TTS playback control lives here, separate from the scrollable chat area.
+To the right of the card in the original image there's an arrow pointing into the card, suggesting audio response is delivered externally — you can ignore that for the standalone app, it's part of a larger diagram callout.
+
+Suggested build approach
+ElementTech / approachContainerRounded Card component, border: 2px solid, border-radius: 20px, box-shadow: subtleIconsLucide-react icon set (Mic, MicVocal, MessageSquare, Volume2)Chat bubblesTwo variants — bot (gray, left, rounded-tr-lg) and user (blue, right, rounded-tl-lg, white text)AvatarsSmall circular/rounded-square icon badges, 28–32pxColor palettePrimary blue #2F6FED, light backgrounds #F5F6F8/#F1F3F5, border #7EC8E3, text #111827/#6B7280 for secondary labelsTypographyClean sans-serif (Inter/Roboto), bold for headers, medium-gray for captionsLayoutFlex-column card: header → toolbar row → scrollable chat area (fixed max-height, overflow-y auto) → footer bar
+If you're building this in React, this maps cleanly onto a ChatWidget component with Header, Toolbar, MessageList, and VoiceResponseBar subcomponents — which also happens to mirror your architecture's separation of concerns (frontend has no business logic, just displays what the backend sends back).

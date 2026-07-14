@@ -1,0 +1,25 @@
+# render.yaml — Render Deployment Configuration
+# This file tells Render how to build and run the FastAPI backend.
+# Render reads this file automatically when you connect your GitHub repo.
+
+services:
+  - type: web
+    name: walkie-talkie-api
+    runtime: python
+    region: singapore          # Closest free-tier region to India
+    plan: free                 # Free tier — enough for demo/dev
+    rootDir: backend           # Deploy only the backend folder
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    healthCheckPath: /health   # Render pings this to confirm app is up
+
+    # Environment variables — set sensitive values in Render dashboard, not here
+    envVars:
+      - key: WHISPER_MODEL
+        value: base
+      - key: TTS_VOICE
+        value: en-IN-NeerjaNeural
+      - key: API_KEY
+        value: dev-key-123
+      # Set these in Render Dashboard → Environment (do NOT commit real secrets):
+      # DIRECTLINE_SECRET = <your Copilot Studio Direct Line secret>

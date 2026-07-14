@@ -1,0 +1,33 @@
+# .gitignore — Walkie Talkie Project
+
+# Python virtual environment (never commit this)
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# SQLite database (auto-created on startup from seed data)
+backend/inventory.db
+*.db
+
+# Environment secrets (never commit real values)
+backend/.env
+.env
+
+# Whisper model cache (large files, auto-downloaded by faster-whisper)
+backend/models/
+*.bin
+
+# Node.js (frontend)
+frontend/node_modules/
+frontend/dist/
+
+# IDE / OS files
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+
+# Azure deployment files (no longer needed)
+backend/startup.sh
