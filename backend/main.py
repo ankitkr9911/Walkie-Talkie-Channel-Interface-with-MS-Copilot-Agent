@@ -50,6 +50,7 @@ app = FastAPI(
         "speech processing, database queries, and API hosting."
     ),
     version="1.0.0",
+    openapi_version="3.0.3",   # Copilot Studio requires 3.0.x — NOT 3.1.0
     lifespan=lifespan,
 )
 

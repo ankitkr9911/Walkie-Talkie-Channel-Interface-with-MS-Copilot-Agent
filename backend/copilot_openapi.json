@@ -1,0 +1,271 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Walkie Talkie Inventory Agent API",
+    "description": "Inventory tool APIs for Microsoft Copilot Studio. Provides product lookup, inventory queries, analytics, and restocking recommendations.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://walkie-talkie-api-adju.onrender.com"
+    }
+  ],
+  "paths": {
+    "/api/inventory/lookup": {
+      "post": {
+        "summary": "Inventory Lookup",
+        "description": "Use this tool when the user asks about stock, availability, or quantity of a SPECIFIC product by name. Supports filtering by warehouse city, category, and price range. Examples: How many Dell laptops are in stock?, Show inventory for Bangalore warehouse, Do we have HP EliteBooks available?, Find all monitors under 20000.",
+        "operationId": "inventoryLookup",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LookupRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List of matching inventory records",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LookupResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inventory/query": {
+      "post": {
+        "summary": "Inventory Query",
+        "description": "Use this tool for BROAD inventory questions involving filtering by status or relationships. NOT for specific product names. filter_type must be one of: low_stock, out_of_stock, by_supplier, by_warehouse, by_category, recent. Examples: Which items are running low?, What is out of stock in Mumbai?, Show items by supplier Dell.",
+        "operationId": "inventoryQuery",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/QueryRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Filtered inventory results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QueryResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inventory/analytics": {
+      "post": {
+        "summary": "Inventory Analytics",
+        "description": "Use this tool when the user wants AGGREGATE statistics, rankings, or summaries. metric must be one of: highest_stock, lowest_stock, average_stock, top_n, category_distribution, warehouse_summary. Examples: Top 10 items by stock, Average stock level, Which category has the most inventory?, Give me a warehouse summary.",
+        "operationId": "inventoryAnalytics",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AnalyticsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Analytics results",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnalyticsResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inventory/recommendation": {
+      "post": {
+        "summary": "Inventory Recommendation",
+        "description": "Use this tool when the user asks for business RECOMMENDATIONS or restocking suggestions. action must be one of: reorder_check, low_stock_alert, alternatives, restock_priorities. Examples: Should we reorder Dell laptops?, What needs restocking?, Suggest alternatives for ThinkPad.",
+        "operationId": "inventoryRecommendation",
+        "parameters": [
+          {
+            "name": "x-api-key",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RecommendationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recommendations",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecommendationResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LookupRequest": {
+        "type": "object",
+        "required": ["product"],
+        "properties": {
+          "product": {
+            "type": "string",
+            "description": "Product name to search for. Supports partial matching. Example: Dell, HP EliteBook, Monitor"
+          },
+          "warehouse": {
+            "type": "string",
+            "nullable": true,
+            "description": "Filter by warehouse city name. Example: Bangalore, Mumbai, Delhi, Hyderabad"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "description": "Filter by category. Example: Laptops, Monitors, Accessories, Desktops, Networking"
+          },
+          "min_price": {
+            "type": "number",
+            "nullable": true,
+            "description": "Minimum unit price in INR"
+          },
+          "max_price": {
+            "type": "number",
+            "nullable": true,
+            "description": "Maximum unit price in INR"
+          }
+        }
+      },
+      "LookupResponse": {
+        "type": "object",
+        "properties": {
+          "results": { "type": "array", "items": { "type": "object" } },
+          "count": { "type": "integer" },
+          "message": { "type": "string" }
+        }
+      },
+      "QueryRequest": {
+        "type": "object",
+        "required": ["filter_type"],
+        "properties": {
+          "filter_type": {
+            "type": "string",
+            "description": "Type of query. Must be one of: low_stock, out_of_stock, by_supplier, by_warehouse, by_category, recent"
+          },
+          "value": {
+            "type": "string",
+            "nullable": true,
+            "description": "Filter value. Supplier name, warehouse city, or category name depending on filter_type"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 20,
+            "description": "Maximum number of results to return"
+          }
+        }
+      },
+      "QueryResponse": {
+        "type": "object",
+        "properties": {
+          "results": { "type": "array", "items": { "type": "object" } },
+          "count": { "type": "integer" },
+          "filter_type": { "type": "string" }
+        }
+      },
+      "AnalyticsRequest": {
+        "type": "object",
+        "required": ["metric"],
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "Analytics metric to compute. Must be one of: highest_stock, lowest_stock, average_stock, top_n, category_distribution, warehouse_summary"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 10,
+            "description": "Number of results for top_n and ranked queries"
+          }
+        }
+      },
+      "AnalyticsResponse": {
+        "type": "object",
+        "properties": {
+          "metric": { "type": "string" },
+          "results": { "type": "array", "items": { "type": "object" } },
+          "count": { "type": "integer" }
+        }
+      },
+      "RecommendationRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Recommendation action. Must be one of: reorder_check, low_stock_alert, alternatives, restock_priorities"
+          },
+          "product_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Product name — required for reorder_check and alternatives actions"
+          }
+        }
+      },
+      "RecommendationResponse": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "recommendations": { "type": "array", "items": { "type": "object" } },
+          "count": { "type": "integer" }
+        }
+      }
+    },
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
+    }
+  },
+  "security": [{ "ApiKeyAuth": [] }]
+}
