@@ -2,13 +2,9 @@ import ChatWidget from './components/ChatWidget';
 
 /**
  * App — Root component
- * The entire app is a single ChatWidget card matching the design reference.
- * No routing needed — this is a single-page voice/chat interface.
+ * ChatWidget is full-page (flex row: sidebar + main panel).
+ * No wrapper div needed — ChatWidget manages the full viewport.
  */
 export default function App() {
-  return (
-    <div className="app-container">
-      <ChatWidget />
-    </div>
-  );
+  return <ChatWidget />;
 }

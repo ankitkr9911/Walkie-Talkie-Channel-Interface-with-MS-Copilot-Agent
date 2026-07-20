@@ -1,204 +1,319 @@
 /**
- * ChatWidget — Main UI Component
- * ================================
- * Matches the design reference: rounded card with sky-blue border,
- * browser chrome mockup, 4-icon toolbar, chat bubbles, voice response footer.
+ * ChatWidget — Walkie Talkie Inventory Assistant UI
+ * ==================================================
+ * Full-page layout: left sidebar + main chat panel.
  *
- * Structure:
- *   Header → BrowserChrome → AgentAvatar → Toolbar → ChatPanel → VoiceFooter
+ * Sidebar (3 buttons):
+ *   • Voice (Hold-To-Talk, TOGGLE: click=start, click=stop+send)
+ *   • Chat  (text input)
+ *   • Player (audio player panel with progress bar + replay)
  *
- * No business logic here — just records audio, sends to backend, displays responses.
+ * Chat panel:
+ *   • Bot messages rendered as Markdown (tables, bold, lists)
+ *   • User messages as plain text
+ *   • Auto-scroll on new messages
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Mic, AudioLines, MessageSquare, Volume2, Send, Loader2, Bot, User } from 'lucide-react';
+import {
+  Mic, Square, MessageSquare, Volume2,
+  Send, Loader2, Bot, User, Play, Pause
+} from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import useAudioRecorder from '../hooks/useAudioRecorder';
 
-// Backend API base URL (proxied via Vite in dev)
-const API = '';
+const API = '';   // Proxied by Vite in dev; Render URL in production
 
+// ── Markdown component map ──────────────────────────────────────────────────
+const MD = {
+  table:    ({ node, ...p }) => <div className="md-table-wrap"><table className="md-table" {...p} /></div>,
+  thead:    ({ node, ...p }) => <thead className="md-thead" {...p} />,
+  tbody:    ({ node, ...p }) => <tbody className="md-tbody" {...p} />,
+  tr:       ({ node, ...p }) => <tr className="md-tr" {...p} />,
+  th:       ({ node, ...p }) => <th className="md-th" {...p} />,
+  td:       ({ node, ...p }) => <td className="md-td" {...p} />,
+  p:        ({ node, ...p }) => <p className="md-p" {...p} />,
+  ul:       ({ node, ...p }) => <ul className="md-ul" {...p} />,
+  ol:       ({ node, ...p }) => <ol className="md-ol" {...p} />,
+  li:       ({ node, ...p }) => <li className="md-li" {...p} />,
+  strong:   ({ node, ...p }) => <strong className="md-strong" {...p} />,
+  em:       ({ node, ...p }) => <em className="md-em" {...p} />,
+  h1:       ({ node, ...p }) => <h1 className="md-h1" {...p} />,
+  h2:       ({ node, ...p }) => <h2 className="md-h2" {...p} />,
+  h3:       ({ node, ...p }) => <h3 className="md-h3" {...p} />,
+  code:     ({ node, inline, ...p }) =>
+    inline
+      ? <code className="md-code-inline" {...p} />
+      : <pre className="md-pre"><code className="md-code-block" {...p} /></pre>,
+  blockquote: ({ node, ...p }) => <blockquote className="md-blockquote" {...p} />,
+};
+
+// ── Helper ──────────────────────────────────────────────────────────────────
+function fmtTime(secs) {
+  if (!secs || isNaN(secs)) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
 export default function ChatWidget() {
-  // --- State ---
   const [messages, setMessages] = useState([
-    { role: 'bot', text: 'Hello! I\'m your Inventory Assistant. Ask me anything about stock, products, or warehouses. You can type or use Hold-To-Talk.' },
+    {
+      role: 'bot',
+      text: "Hello! I'm your **Inventory Assistant**.\n\nAsk me anything about stock levels, products, or warehouses. You can **type** or use the **Voice** button on the left.",
+    },
   ]);
-  const [inputText, setInputText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeMode, setActiveMode] = useState('voice'); // voice | chat
-  const [currentAudio, setCurrentAudio] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [inputText, setInputText]   = useState('');
+  const [isLoading, setIsLoading]   = useState(false);
+  const [activeMode, setActiveMode] = useState('voice');   // 'voice' | 'chat' | 'player'
+  const [currentAudio, setCurrentAudio] = useState(null); // base64 WAV string
+  const [isPlaying, setIsPlaying]   = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [lastResponseText, setLastResponseText] = useState('');
 
   const chatEndRef = useRef(null);
-  const audioRef = useRef(new Audio());
+  const audioRef   = useRef(new Audio());
   const { isRecording, startRecording, stopRecording } = useAudioRecorder();
 
-  // Auto-scroll chat to bottom on new messages
+  // ── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // --- Audio Playback ---
-  const playAudio = useCallback((base64Audio) => {
-    if (!base64Audio) return;
-    const audio = audioRef.current;
-    audio.src = `data:audio/wav;base64,${base64Audio}`;
-    audio.onplay = () => setIsPlaying(true);
-    audio.onended = () => setIsPlaying(false);
-    audio.onerror = () => setIsPlaying(false);
-    audio.play().catch(() => setIsPlaying(false));
-    setCurrentAudio(base64Audio);
+  // ── Audio event listeners ──────────────────────────────────────────────────
+  useEffect(() => {
+    const a = audioRef.current;
+    const onTime     = () => setAudioProgress(a.currentTime);
+    const onDuration = () => setAudioDuration(a.duration);
+    const onPlay     = () => setIsPlaying(true);
+    const onPause    = () => setIsPlaying(false);
+    const onEnded    = () => { setIsPlaying(false); setAudioProgress(0); };
+    const onError    = () => setIsPlaying(false);
+
+    a.addEventListener('timeupdate',      onTime);
+    a.addEventListener('durationchange',  onDuration);
+    a.addEventListener('play',            onPlay);
+    a.addEventListener('pause',           onPause);
+    a.addEventListener('ended',           onEnded);
+    a.addEventListener('error',           onError);
+
+    return () => {
+      a.removeEventListener('timeupdate',      onTime);
+      a.removeEventListener('durationchange',  onDuration);
+      a.removeEventListener('play',            onPlay);
+      a.removeEventListener('pause',           onPause);
+      a.removeEventListener('ended',           onEnded);
+      a.removeEventListener('error',           onError);
+    };
   }, []);
 
-  // --- Send Voice (Hold-To-Talk release) ---
-  const handleVoiceStop = useCallback(async () => {
-    const blob = await stopRecording();
-    if (!blob || blob.size < 1000) return; // Ignore very short recordings (clicks)
+  // ── Audio helpers ──────────────────────────────────────────────────────────
+  const loadAndPlay = useCallback((base64) => {
+    if (!base64) return;
+    const a = audioRef.current;
+    a.src = `data:audio/wav;base64,${base64}`;
+    setCurrentAudio(base64);
+    setAudioProgress(0);
+    setAudioDuration(0);
+    a.play().catch(() => {});
+  }, []);
 
-    setIsLoading(true);
-    setMessages((prev) => [...prev, { role: 'user', text: '🎤 Recording sent...' }]);
+  const togglePlayPause = useCallback(() => {
+    const a = audioRef.current;
+    if (!currentAudio) return;
+    if (isPlaying) { a.pause(); }
+    else           { a.play().catch(() => {}); }
+  }, [isPlaying, currentAudio]);
 
-    try {
-      const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
-      formData.append('session_id', 'default');
+  const handleSeek = useCallback((e) => {
+    if (!audioDuration) return;
+    const rect  = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    audioRef.current.currentTime = Math.max(0, Math.min(ratio * audioDuration, audioDuration));
+  }, [audioDuration]);
 
-      const res = await fetch(`${API}/api/voice`, { method: 'POST', body: formData });
-      const data = await res.json();
+  // ── Toggle-based PTT ───────────────────────────────────────────────────────
+  // Click once → start recording (mic opens, button turns red)
+  // Click again → stop recording → sends audio to backend
+  const handlePttToggle = useCallback(async () => {
+    if (isRecording) {
+      // ── STOP + SEND ──
+      const blob = await stopRecording();
+      if (!blob || blob.size < 500) return;   // Ignore accidental double-clicks
 
-      // Update user message with transcript
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: 'user', text: data.transcript || '(could not transcribe)' };
-        return updated;
-      });
+      setIsLoading(true);
+      setMessages((prev) => [...prev, { role: 'user', text: '🎤 Sending recording...' }]);
 
-      // Add bot response
-      setMessages((prev) => [...prev, { role: 'bot', text: data.response }]);
+      try {
+        const fd = new FormData();
+        fd.append('audio', blob, 'recording.webm');
+        fd.append('session_id', 'default');
 
-      // Play audio response
-      if (data.audio) playAudio(data.audio);
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: 'bot', text: 'Sorry, something went wrong. Please try again.' }]);
-    } finally {
-      setIsLoading(false);
+        const res  = await fetch(`${API}/api/voice`, { method: 'POST', body: fd });
+        const data = await res.json();
+
+        // Replace placeholder with actual transcript
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = {
+            role: 'user',
+            text: data.transcript || '(could not transcribe)',
+          };
+          return copy;
+        });
+
+        // Bot reply
+        const reply = data.response || 'No response received.';
+        setMessages((prev) => [...prev, { role: 'bot', text: reply }]);
+        setLastResponseText(reply);
+        if (data.audio) loadAndPlay(data.audio);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'bot', text: 'Sorry, something went wrong. Please try again.' },
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      // ── START ──
+      startRecording();
     }
-  }, [stopRecording, playAudio]);
+  }, [isRecording, startRecording, stopRecording, loadAndPlay]);
 
-  // --- Send Text Message ---
+  // ── Text chat ──────────────────────────────────────────────────────────────
   const handleSendText = useCallback(async () => {
     const text = inputText.trim();
     if (!text || isLoading) return;
-
     setInputText('');
     setIsLoading(true);
     setMessages((prev) => [...prev, { role: 'user', text }]);
 
     try {
-      const res = await fetch(`${API}/api/chat`, {
-        method: 'POST',
+      const res  = await fetch(`${API}/api/chat`, {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, session_id: 'default' }),
+        body:    JSON.stringify({ message: text, session_id: 'default' }),
       });
       const data = await res.json();
-
-      setMessages((prev) => [...prev, { role: 'bot', text: data.response }]);
-      if (data.audio) playAudio(data.audio);
-    } catch (err) {
-      setMessages((prev) => [...prev, { role: 'bot', text: 'Sorry, something went wrong. Please try again.' }]);
+      const reply = data.response || 'No response received.';
+      setMessages((prev) => [...prev, { role: 'bot', text: reply }]);
+      setLastResponseText(reply);
+      if (data.audio) loadAndPlay(data.audio);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', text: 'Sorry, something went wrong. Please try again.' },
+      ]);
     } finally {
       setIsLoading(false);
     }
-  }, [inputText, isLoading, playAudio]);
+  }, [inputText, isLoading, loadAndPlay]);
 
-  // Handle Enter key in text input
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendText();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); }
   };
 
-  // --- Render ---
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="widget-card">
-      {/* Header */}
-      <div className="widget-header">
-        <h1 className="widget-title">Walkie Talkie — Inventory Assistant</h1>
-      </div>
+    <div className="app-root">
 
-      {/* Browser Chrome Mockup */}
-      <div className="browser-chrome">
-        <div className="chrome-dots">
-          <span className="dot dot-red" />
-          <span className="dot dot-yellow" />
-          <span className="dot dot-green" />
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        <div className="sidebar-logo">
+          <Bot size={26} color="#60a5fa" />
         </div>
-        <div className="chrome-bar">
-          <span className="chrome-nav">&lt; &gt;</span>
-          <span className="chrome-url">walkie-talkie.app</span>
-        </div>
-      </div>
 
-      {/* Agent Avatar */}
-      <div className="agent-row">
-        <div className="agent-avatar" id="agent-avatar">
-          <MessageSquare size={20} color="#fff" />
-          <div className="avatar-badge">
-            <User size={10} color="#fff" />
+        <nav className="sidebar-nav">
+          {/* Voice / PTT */}
+          <button
+            className={`sidebar-btn ${activeMode === 'voice' ? 'active' : ''}`}
+            onClick={() => setActiveMode('voice')}
+            title="Hold-To-Talk"
+            id="btn-voice-mode"
+          >
+            <Mic size={22} className={isRecording ? 'rec-icon' : ''} />
+            <span>Voice</span>
+            {isRecording && <span className="rec-dot" />}
+          </button>
+
+          {/* Chat */}
+          <button
+            className={`sidebar-btn ${activeMode === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveMode('chat')}
+            title="Chat UI"
+            id="btn-chat-mode"
+          >
+            <MessageSquare size={22} />
+            <span>Chat</span>
+          </button>
+
+          {/* Audio Player */}
+          <button
+            className={`sidebar-btn ${activeMode === 'player' ? 'active' : ''}`}
+            onClick={() => setActiveMode('player')}
+            title="Audio Player"
+            id="btn-player-mode"
+          >
+            <Volume2 size={22} className={isPlaying ? 'pulse' : ''} />
+            <span>Player</span>
+            {isPlaying && <span className="playing-dot" />}
+          </button>
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className={`conn-badge ${isLoading ? 'loading' : 'online'}`}>
+            {isLoading
+              ? <Loader2 size={12} className="spin" />
+              : <span className="conn-dot" />
+            }
           </div>
         </div>
-      </div>
+      </aside>
 
-      {/* Icon Toolbar */}
-      <div className="toolbar" id="toolbar">
-        <button
-          className={`toolbar-btn ${activeMode === 'voice' ? 'active' : ''}`}
-          onClick={() => setActiveMode('voice')}
-          id="btn-hold-to-talk"
-        >
-          <Mic size={22} />
-          <span>Hold-To-Talk</span>
-        </button>
-        <button className="toolbar-btn" id="btn-audio-recorder">
-          <AudioLines size={22} />
-          <span>Audio Recorder</span>
-        </button>
-        <button
-          className={`toolbar-btn ${activeMode === 'chat' ? 'active' : ''}`}
-          onClick={() => setActiveMode('chat')}
-          id="btn-chat-ui"
-        >
-          <MessageSquare size={22} />
-          <span>Chat UI</span>
-        </button>
-        <button
-          className="toolbar-btn"
-          onClick={() => currentAudio && playAudio(currentAudio)}
-          id="btn-audio-player"
-        >
-          <Volume2 size={22} />
-          <span>Audio Player</span>
-        </button>
-      </div>
+      {/* ── Main Panel ── */}
+      <main className="main-panel">
 
-      {/* Chat Conversation Panel */}
-      <div className="chat-panel" id="chat-panel">
-        <h2 className="chat-heading">Chat Conversation</h2>
+        {/* Header */}
+        <header className="main-header">
+          <div className="header-left">
+            <h1 className="main-title">Walkie Talkie — Inventory Assistant</h1>
+            <span className="header-sub">AI-powered inventory management</span>
+          </div>
+          <div className={`status-badge ${isLoading ? 'processing' : 'online'}`}>
+            {isLoading
+              ? <><Loader2 size={13} className="spin" /> Processing…</>
+              : <><span className="status-dot" /> Online</>
+            }
+          </div>
+        </header>
 
-        <div className="message-list" id="message-list">
+        {/* Chat Messages */}
+        <section className="message-list" id="message-list">
           {messages.map((msg, i) => (
             <div key={i} className={`message-row ${msg.role}`}>
               {msg.role === 'bot' && (
                 <div className="msg-avatar bot-icon">
-                  <Bot size={16} color="#fff" />
+                  <Bot size={15} color="#fff" />
                 </div>
               )}
+
               <div className={`message-bubble ${msg.role}`}>
-                {msg.text}
+                {msg.role === 'bot' ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>
+                    {msg.text}
+                  </ReactMarkdown>
+                ) : (
+                  msg.text
+                )}
               </div>
+
               {msg.role === 'user' && (
                 <div className="msg-avatar user-icon">
-                  <User size={16} color="#fff" />
+                  <User size={15} color="#fff" />
                 </div>
               )}
             </div>
@@ -206,65 +321,129 @@ export default function ChatWidget() {
 
           {isLoading && (
             <div className="message-row bot">
-              <div className="msg-avatar bot-icon">
-                <Bot size={16} color="#fff" />
-              </div>
+              <div className="msg-avatar bot-icon"><Bot size={15} color="#fff" /></div>
               <div className="message-bubble bot typing">
-                <Loader2 size={16} className="spin" />
-                <span>Thinking...</span>
+                <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
               </div>
             </div>
           )}
-
           <div ref={chatEndRef} />
-        </div>
-      </div>
+        </section>
 
-      {/* Input Area — Voice or Text depending on mode */}
-      <div className="input-area" id="input-area">
-        {activeMode === 'voice' ? (
-          <button
-            className={`ptt-button ${isRecording ? 'recording' : ''}`}
-            onMouseDown={startRecording}
-            onMouseUp={handleVoiceStop}
-            onMouseLeave={isRecording ? handleVoiceStop : undefined}
-            onTouchStart={startRecording}
-            onTouchEnd={handleVoiceStop}
-            disabled={isLoading}
-            id="ptt-button"
-          >
-            <Mic size={24} />
-            <span>{isRecording ? 'Release to Send' : isLoading ? 'Processing...' : 'Hold to Talk'}</span>
-          </button>
-        ) : (
-          <div className="text-input-row">
-            <input
-              type="text"
-              className="text-input"
-              placeholder="Type your question..."
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isLoading}
-              id="text-input"
-            />
-            <button
-              className="send-btn"
-              onClick={handleSendText}
-              disabled={isLoading || !inputText.trim()}
-              id="send-button"
-            >
-              {isLoading ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
-            </button>
-          </div>
-        )}
-      </div>
+        {/* ── Input / Player Area ── */}
+        <footer className="input-area">
 
-      {/* Voice Response Footer */}
-      <div className="voice-footer" id="voice-footer">
-        <Volume2 size={18} className={isPlaying ? 'pulse' : ''} />
-        <span>{isPlaying ? 'Playing Voice Response...' : 'Voice Response'}</span>
-      </div>
+          {/* Voice Mode — Toggle PTT */}
+          {activeMode === 'voice' && (
+            <div className="ptt-container">
+              <button
+                className={`ptt-button ${isRecording ? 'recording' : ''}`}
+                onClick={handlePttToggle}
+                disabled={isLoading}
+                id="ptt-button"
+              >
+                {isRecording
+                  ? <><Square size={20} /><span>Release to Send</span></>
+                  : <><Mic size={20} /><span>{isLoading ? 'Processing…' : 'Hold to Talk'}</span></>
+                }
+                {isRecording && <span className="rec-ring" />}
+              </button>
+              <p className="ptt-hint">
+                {isRecording
+                  ? '🔴 Recording… click again to send'
+                  : 'Click to start recording, click again to send'}
+              </p>
+            </div>
+          )}
+
+          {/* Chat Mode — Text Input */}
+          {activeMode === 'chat' && (
+            <div className="text-input-row">
+              <input
+                type="text"
+                className="text-input"
+                placeholder="Type your question here…"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+                id="text-input"
+                autoFocus
+              />
+              <button
+                className="send-btn"
+                onClick={handleSendText}
+                disabled={isLoading || !inputText.trim()}
+                id="send-button"
+              >
+                {isLoading ? <Loader2 size={18} className="spin" /> : <Send size={18} />}
+              </button>
+            </div>
+          )}
+
+          {/* Player Mode — Audio Player */}
+          {activeMode === 'player' && (
+            <div className="audio-player-card">
+              {currentAudio ? (
+                <>
+                  <div className="player-top">
+                    <div className="player-icon-wrap">
+                      <Volume2 size={20} color="#2F6FED" />
+                    </div>
+                    <div className="player-info">
+                      <span className="player-title">Last Voice Response</span>
+                      <span className="player-sub">Click to replay anytime</span>
+                    </div>
+                  </div>
+
+                  <div className="player-controls">
+                    <button
+                      className="play-pause-btn"
+                      onClick={togglePlayPause}
+                      id="play-pause-btn"
+                    >
+                      {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                    </button>
+
+                    <div className="progress-outer" onClick={handleSeek} id="progress-track" title="Click to seek">
+                      <div
+                        className="progress-inner"
+                        style={{
+                          width: audioDuration ? `${(audioProgress / audioDuration) * 100}%` : '0%',
+                        }}
+                      />
+                      {audioDuration > 0 && (
+                        <div
+                          className="progress-thumb"
+                          style={{
+                            left: `${(audioProgress / audioDuration) * 100}%`,
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <span className="time-display">
+                      {fmtTime(audioProgress)} / {fmtTime(audioDuration)}
+                    </span>
+                  </div>
+
+                  {lastResponseText && (
+                    <p className="player-transcript" title="Response text">
+                      {lastResponseText.slice(0, 120)}{lastResponseText.length > 120 ? '…' : ''}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="player-empty">
+                  <Volume2 size={36} color="#d1d5db" />
+                  <p>No audio yet</p>
+                  <span>Ask a question via Voice or Chat to get a voice response</span>
+                </div>
+              )}
+            </div>
+          )}
+        </footer>
+      </main>
     </div>
   );
 }
