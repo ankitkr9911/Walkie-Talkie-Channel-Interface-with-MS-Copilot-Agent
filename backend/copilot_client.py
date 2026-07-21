@@ -26,14 +26,14 @@ DIRECTLINE_BASE = "https://directline.botframework.com/v3/directline"
 
 # Polling settings for bot response
 POLL_INTERVAL_SEC = 0.5     # Time between polls
-POLL_TIMEOUT_SEC = 30       # Max wait time for a response
+POLL_TIMEOUT_SEC = 60       # Max wait time for a response
 
 
 class CopilotClient:
     """Async client for Microsoft Copilot Studio via Direct Line API."""
 
     def __init__(self):
-        self._http = httpx.AsyncClient(timeout=30)
+        self._http = httpx.AsyncClient(timeout=90)
         # Cache active conversations for memory/context continuity
         # Format: { session_id: { "conversation_id": str, "token": str, "watermark": str } }
         self._sessions: dict = {}
